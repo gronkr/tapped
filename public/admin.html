@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tapped admin</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<style>
+main{max-width:720px}
+label{display:block;color:var(--muted);font-size:13px;margin:12px 0 6px}
+input,textarea{width:100%;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);padding:10px 12px;font:inherit}
+textarea{min-height:120px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.card{border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:18px;margin-bottom:16px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);padding:12px;border-radius:10px;max-height:300px;overflow:auto;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+  <h1 style="font:700 24px var(--display)">Tapped admin</h1>
+  <div class="card">
+    <label for="key">Admin key</label>
+    <div style="display:flex;gap:8px"><input id="key" type="password"><button class="btn primary" id="load">Load</button></div>
+    <p class="note" id="st"></p>
+  </div>
+
+  <div class="card">
+    <h2>Current season</h2>
+    <pre id="cur">Load to see it.</pre>
+  </div>
+
+  <div class="card">
+    <h2>Start or edit a season</h2>
+    <p class="muted small">A new season id (s1 → s2) starts everyone from zero. Keeping the same id edits the current season.</p>
+    <div class="row">
+      <div><label for="sid">Season id</label><input id="sid" placeholder="s1"></div>
+      <div><label for="sname">Name</label><input id="sname" placeholder="Season 1"></div>
+      <div><label for="sstart">Starts</label><input id="sstart" type="datetime-local"></div>
+      <div><label for="send">Ends</label><input id="send" type="datetime-local"></div>
+    </div>
+    <label for="smin">Minimum points to get a payout</label><input id="smin" type="number" value="1000">
+    <label for="spool">Pool, one stock per line: TICKER, mint address, amount of tokens</label>
+    <textarea id="spool" placeholder="NVDAx, <mint address>, 5&#10;TSLAx, <mint address>, 3"></textarea>
+    <p class="muted small">You must actually hold these tokens in the wallet you'll pay out from.</p>
+    <button class="btn primary" id="save">Save season</button>
+  </div>
+
+  <div class="card">
+    <h2>End of season payouts</h2>
+    <p class="muted small">After the season ends, this builds the exact payout list (wallet, stock, amount) as a CSV for a bulk-send tool, and shows each player their payout in the game.</p>
+    <button class="btn" id="pay">Build payout list</button>
+    <pre id="csv" hidden></pre>
+    <a class="btn" id="dl" hidden download="payouts.csv">Download CSV</a>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+$("key").value = sessionStorage.getItem("tk") || "";
+const st = (m, c = "") => { $("st").className = "note " + c; $("st").textContent = m; };
+async function api(method, body) {
+  sessionStorage.setItem("tk", $("key").value);
+  const r = await fetch("/api/admin", { method, headers: { "x-admin-key": $("key").value, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.status);
+  return d;
+}
+const local = (ms) => { const d = new Date(ms); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+$("load").onclick = async () => {
+  try {
+    const d = await api("GET");
+    $("cur").textContent = JSON.stringify({ season: d.season, poolUsd: d.pool?.totalUsd, players: d.agg?.players, totalPoints: d.agg?.total }, null, 2);
+    if (d.season) {
+      $("sid").value = d.season.id; $("sname").value = d.season.name; $("smin").value = d.season.minPoints;
+      $("sstart").value = local(d.season.startsAt); $("send").value = local(d.season.endsAt);
+      $("spool").value = d.season.pool.map((a) => `${a.ticker}, ${a.mint}, ${a.amount}`).join("\n");
+    }
+    st("Loaded.", "ok");
+  } catch (e) { st(e.message, "err"); }
+};
+$("save").onclick = async () => {
+  try {
+    const pool = $("spool").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+      const [ticker, mint, amount] = l.split(",").map((x) => x.trim()); return { ticker, mint, amount: Number(amount) };
+    });
+    await api("POST", { action: "set-season", season: {
+      id: $("sid").value.trim(), name: $("sname").value.trim(), minPoints: Number($("smin").value),
+      startsAt: new Date($("sstart").value).toISOString(), endsAt: new Date($("send").value).toISOString(), pool } });
+    st("Season saved.", "ok"); $("load").click();
+  } catch (e) { st(e.message, "err"); }
+};
+$("pay").onclick = async () => {
+  try {
+    const d = await api("POST", { action: "payouts" });
+    $("csv").hidden = false; $("csv").textContent = d.csv;
+    $("dl").hidden = false; $("dl").href = URL.createObjectURL(new Blob([d.csv], { type: "text/csv" }));
+    st(`${d.winners} wallets get a payout.`, "ok");
+  } catch (e) { st(e.message, "err"); }
+};
+</script>
+</body>
+</html>
