@@ -26,6 +26,12 @@ const ref = new URLSearchParams(location.search).get("ref");
 if (ref && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(ref)) localStorage.setItem("tp_ref", ref);
 
 const note = (msg, cls = "") => { const n = $("note"); n.className = "note " + cls; n.textContent = msg; };
+let toastTimer;
+function toast(msg, isErr = false) {
+  const t = $("toast");
+  t.textContent = msg; t.className = "toast" + (isErr ? " err" : ""); t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), isErr ? 7000 : 3500);
+}
 
 // ---------- api ----------
 async function api(path, opts = {}) {
@@ -130,34 +136,55 @@ function showPayout(po) {
 
 // ---------- wallet ----------
 function provider() { const p = window.phantom?.solana || window.solana; return p?.isPhantom ? p : null; }
+async function waitForProvider(ms = 1500) {
+  for (let t = 0; t < ms; t += 100) { const p = provider(); if (p) return p; await new Promise((r) => setTimeout(r, 100)); }
+  return null;
+}
+let connecting = false;
 
 async function connect() {
-  const p = provider();
+  if (connecting) return;
+  $("connectModal").hidden = true;
+  const p = await waitForProvider();
   if (!p) {
     if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      toast("Opening this page in the Phantom app…");
       location.href = `https://phantom.app/ul/browse/${encodeURIComponent(location.href)}?ref=${encodeURIComponent(location.origin)}`;
-    } else window.open("https://phantom.app/", "_blank", "noopener");
+    } else {
+      toast("Phantom isn't installed in this browser. Install it, then refresh this page.", true);
+      window.open("https://phantom.app/download", "_blank", "noopener");
+    }
     return;
   }
+  connecting = true;
+  $("connectBtn").disabled = true;
   try {
-    note("Connect in Phantom…");
-    const r = await p.connect();
+    toast("Approve the connection in Phantom…");
+    const timeout = (ms, what) => new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error(what), { code: "timeout" })), ms));
+    const r = await Promise.race([p.connect(), timeout(15000, "connect")]);
     G.provider = p;
     const wallet = r.publicKey.toString();
-    if (G.token && G.wallet === wallet) { note(""); return refresh(); }
-    note("Sign the message to log in. It's free and sends nothing.");
+    if (G.token && G.wallet === wallet) { toast("Connected."); return refresh(); }
+    toast("Sign the message in Phantom to log in. It's free and sends nothing.");
     const issued = new Date().toISOString();
     const msg = `Tapped: sign in\nWallet: ${wallet}\nIssued: ${issued}`;
-    const { signature } = await p.signMessage(new TextEncoder().encode(msg), "utf8");
+    const { signature } = await Promise.race([p.signMessage(new TextEncoder().encode(msg), "utf8"), timeout(60000, "sign")]);
     const { ok, data } = await api("/api/auth", { method: "POST", body: JSON.stringify({
       wallet, issued, signature: btoa(String.fromCharCode(...signature)), ref: localStorage.getItem("tp_ref") }) });
-    if (!ok) throw new Error(data.error || "Login failed.");
+    if (!ok) throw new Error(data.error || "Login failed. Try again.");
     G.token = data.token; G.wallet = wallet;
     localStorage.setItem("tp_token", G.token); localStorage.setItem("tp_wallet", wallet);
-    note("You're in. Start tapping.", "ok");
+    toast("You're in. Start smashing Dip!");
     await refresh();
   } catch (e) {
-    note(e?.code === 4001 ? "Cancelled in Phantom." : e.message || "Couldn't connect.", "err");
+    const code = e?.code;
+    toast(code === 4001 ? "Cancelled in Phantom."
+      : code === -32002 ? "Phantom already has a request open. Click the Phantom icon in your browser toolbar to finish or close it, then try again."
+      : code === "timeout" ? "Phantom didn't respond. Click the Phantom icon in your toolbar: unlock it or approve the waiting request. On Brave, set Settings → Web3 → Default Solana wallet to Extensions. Then refresh and try again."
+      : e?.message || "Couldn't connect. Try again.", true);
+  } finally {
+    connecting = false;
+    $("connectBtn").disabled = false;
   }
 }
 
@@ -182,6 +209,15 @@ async function refresh() {
   renderBoard();
 }
 
+// ---------- connect prompt ----------
+function askToConnect() {
+  $("connectModal").hidden = false;
+  const b = $("connectBtn"); b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse");
+}
+$("cmConnect").addEventListener("click", connect);
+$("cmClose").addEventListener("click", () => ($("connectModal").hidden = true));
+$("connectModal").addEventListener("click", (e) => { if (e.target.id === "connectModal") $("connectModal").hidden = true; });
+
 // ---------- tapping ----------
 const tapBtn = $("tapBtn");
 function spawn(x, y, amount) {
@@ -193,7 +229,7 @@ function spawn(x, y, amount) {
 }
 tapBtn.addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  if (!G.token && !window.__TP_DEMO) { connect(); return; }
+  if (!G.token && !window.__TP_DEMO) { askToConnect(); return; }
   if (!G.me) return;
   const now = Date.now() + (G.clockSkew || 0);
   if (!G.season || now < G.season.startsAt) { note("The season hasn't started yet."); return; }
@@ -249,7 +285,7 @@ function renderUpgrades() {
 $("upgrades").addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-up]");
   if (!b) return;
-  if (!G.token) return connect();
+  if (!G.token) return askToConnect();
   const upgrade = b.dataset.up, level = Number(b.dataset.lvl), u = G.upgrades[upgrade];
   if (!confirm(`Burn ${fmt(u.cost[level])} $TAPPED for ${u.name} level ${level}? Burned tokens are gone for good.`)) return;
   b.disabled = true;
@@ -295,7 +331,7 @@ function renderInvite() {
   if (G.me) $("refStats").textContent = `${G.me.refCount} invited · ${fmt(G.me.refPoints)} points earned from invites`;
 }
 $("copyRef").addEventListener("click", async () => {
-  if (!G.wallet) return connect();
+  if (!G.wallet) return askToConnect();
   await navigator.clipboard.writeText($("refLink").value); $("copyRef").textContent = "Copied";
 });
 

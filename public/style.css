@@ -151,3 +151,15 @@ button{font:inherit;cursor:pointer}
 
 #shareRef{margin-bottom:16px}
 #refStats{margin-top:6px}
+
+.modal{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:16px;background:rgba(15,40,70,.55)}
+.modal[hidden]{display:none}
+.modal-card{max-width:420px;width:100%;text-align:center}
+.modal-card .bluebtn{margin:6px 0 4px}
+.linkbtn{background:none;border:0;color:#8A6337;font:800 15px var(--body);padding:12px;min-height:44px;text-decoration:underline}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;max-width:min(520px,92vw);
+  padding:14px 18px;border-radius:14px;background:#2B1A0C;color:#FFE9B8;font:800 15px var(--body);box-shadow:0 0 0 3px var(--gold),0 8px 24px rgba(0,0,0,.35);text-align:center}
+.toast.err{background:#7A1E14;color:#fff}
+.toast[hidden]{display:none}
+#connectBtn.pulse{animation:pulse .8s ease-in-out 3}
+@keyframes pulse{50%{transform:scale(1.08)}}
