@@ -219,7 +219,24 @@ function updateConnectBtn() {
   b.textContent = G.wallet ? short(G.wallet) : "Connect";
   b.classList.toggle("primary", !G.wallet);
 }
-$("connectBtn").addEventListener("click", () => (window.__TP_DEMO ? note("Demo mode: wallet connect is off.") : G.wallet ? (confirm("Disconnect this wallet?") && signOut()) : connect()));
+function setMenu(open) {
+  $("walletMenu").hidden = !open;
+  $("connectBtn").setAttribute("aria-expanded", open ? "true" : "false");
+}
+$("connectBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (window.__TP_DEMO) return note("Demo mode: wallet connect is off.");
+  if (G.wallet) return setMenu($("walletMenu").hidden);
+  connect();
+});
+$("disconnectBtn").addEventListener("click", async () => {
+  setMenu(false);
+  try { await G.provider?.disconnect?.(); } catch {}
+  signOut();
+  toast("Disconnected.");
+});
+document.addEventListener("click", (e) => { if (!e.target.closest(".walletwrap")) setMenu(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
 
 async function refresh() {
   updateConnectBtn();
