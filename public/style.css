@@ -148,3 +148,6 @@ button{font:inherit;cursor:pointer}
 .xbtn{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#111;border:4px solid var(--gold);box-shadow:0 0 0 3px var(--ink),0 5px 0 3px rgba(43,26,12,.45)}
 .xbtn svg{width:22px;height:22px}
 .xbtn:active{transform:translateY(3px)}
+
+#shareRef{margin-bottom:16px}
+#refStats{margin-top:6px}

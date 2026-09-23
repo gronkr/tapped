@@ -22,7 +22,7 @@ pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);padding:12px;
   <h1 style="font:700 24px var(--display)">Tapped admin</h1>
   <div class="card">
     <label for="key">Admin key</label>
-    <div style="display:flex;gap:8px"><input id="key" type="password"><button class="btn primary" id="load">Load</button></div>
+    <div style="display:flex;gap:8px"><input id="key" type="password"><button class="bluebtn sm" id="load">Load</button></div>
     <p class="note" id="st"></p>
   </div>
 
@@ -43,22 +43,27 @@ pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);padding:12px;
     <label for="smin">Minimum points to get a payout</label><input id="smin" type="number" value="1000">
     <label for="spool">Pool, one stock per line: TICKER, mint address, amount of tokens</label>
     <textarea id="spool" placeholder="NVDAx, <mint address>, 5&#10;TSLAx, <mint address>, 3"></textarea>
-    <p class="muted small">You must actually hold these tokens in the wallet you'll pay out from.</p>
-    <button class="btn primary" id="save">Save season</button>
+    <p class="muted small">Buy these amounts before you send payouts. The site doesn't check your wallet.</p>
+    <button class="bluebtn sm" id="save">Save season</button>
+    <p class="note" id="st2"></p>
   </div>
 
   <div class="card">
     <h2>End of season payouts</h2>
     <p class="muted small">After the season ends, this builds the exact payout list (wallet, stock, amount) as a CSV for a bulk-send tool, and shows each player their payout in the game.</p>
-    <button class="btn" id="pay">Build payout list</button>
+    <button class="bluebtn sm" id="pay">Build payout list</button>
+    <p class="note" id="st3"></p>
     <pre id="csv" hidden></pre>
-    <a class="btn" id="dl" hidden download="payouts.csv">Download CSV</a>
+    <a class="bluebtn sm" id="dl" hidden download="payouts.csv">Download CSV</a>
   </div>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
 $("key").value = sessionStorage.getItem("tk") || "";
-const st = (m, c = "") => { $("st").className = "note " + c; $("st").textContent = m; };
+const st = (m, c = "", where = "st") => {
+  for (const id of ["st", "st2", "st3"]) { $(id).className = "note " + (id === where ? c : ""); $(id).textContent = id === where ? m : ""; }
+  if (c === "err") alert(m);
+};
 async function api(method, body) {
   sessionStorage.setItem("tk", $("key").value);
   const r = await fetch("/api/admin", { method, headers: { "x-admin-key": $("key").value, "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -87,16 +92,16 @@ $("save").onclick = async () => {
     await api("POST", { action: "set-season", season: {
       id: $("sid").value.trim(), name: $("sname").value.trim(), minPoints: Number($("smin").value),
       startsAt: new Date($("sstart").value).toISOString(), endsAt: new Date($("send").value).toISOString(), pool } });
-    st("Season saved.", "ok"); $("load").click();
-  } catch (e) { st(e.message, "err"); }
+    await $("load").onclick(); st("Season saved.", "ok", "st2");
+  } catch (e) { st(e.message, "err", "st2"); }
 };
 $("pay").onclick = async () => {
   try {
     const d = await api("POST", { action: "payouts" });
     $("csv").hidden = false; $("csv").textContent = d.csv;
     $("dl").hidden = false; $("dl").href = URL.createObjectURL(new Blob([d.csv], { type: "text/csv" }));
-    st(`${d.winners} wallets get a payout.`, "ok");
-  } catch (e) { st(e.message, "err"); }
+    st(`${d.winners} wallets get a payout.`, "ok", "st3");
+  } catch (e) { st(e.message, "err", "st3"); }
 };
 </script>
 </body>

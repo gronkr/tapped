@@ -4,6 +4,7 @@ import { poolView, seasonView } from "../lib/view.mjs";
 import { json, fail } from "../lib/http.mjs";
 
 function checkSeason(s) {
+  if (s && typeof s.id === "string") s.id = s.id.trim().toLowerCase();
   if (!/^[a-z0-9-]{1,32}$/.test(s?.id || "")) throw new Error("Season id: lowercase letters, numbers and dashes only (e.g. s1).");
   if (!s.name) throw new Error("Season needs a name.");
   const startsAt = Date.parse(s.startsAt), endsAt = Date.parse(s.endsAt);

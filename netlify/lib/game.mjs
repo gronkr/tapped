@@ -2,13 +2,13 @@
 // `levels` = the stat at each level; `cost` = whole $TAPPED burned to reach that level.
 export const UPGRADES = {
   tap:   { name: "Tap power",   unit: "points per tap",     levels: [1, 2, 3, 5, 8, 12, 18, 25, 35, 50],
-           cost: [0, 1000, 2500, 6000, 15000, 35000, 80000, 180000, 400000, 900000] },
+           cost: [0, 8000, 20000, 48000, 120000, 280000, 640000, 1440000, 3200000, 7200000] },
   cap:   { name: "Energy tank", unit: "max energy",         levels: [500, 750, 1000, 1500, 2000, 3000, 4000, 5000],
-           cost: [0, 800, 2000, 5000, 12000, 30000, 70000, 150000] },
+           cost: [0, 6400, 16000, 40000, 96000, 240000, 560000, 1200000] },
   regen: { name: "Recharge",    unit: "energy per second",  levels: [1, 1.5, 2, 3, 4, 6],
-           cost: [0, 1500, 4000, 10000, 25000, 60000] },
+           cost: [0, 12000, 32000, 80000, 200000, 480000] },
   auto:  { name: "Auto-miner",  unit: "points per hour, even offline", levels: [0, 300, 800, 2000, 5000, 12000, 30000],
-           cost: [0, 3000, 8000, 20000, 50000, 120000, 300000] },
+           cost: [0, 24000, 64000, 160000, 400000, 960000, 2400000] },
 };
 export const AUTO_CAP_HOURS = 8;   // offline auto-mining stops accruing after this long
 export const REF_SHARE = 0.1;      // referrers earn 10% of their invites' points

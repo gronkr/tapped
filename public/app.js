@@ -59,6 +59,7 @@ function renderSeason() {
     pre ? `Starts in ${timeLeft(s.startsAt - now)}` : over ? "Season ended" : `Ends in ${timeLeft(s.endsAt - now)}`}</small>`;
 }
 setInterval(renderSeason, 30e3);
+setInterval(() => { if (!document.hidden) loadSeason(); }, 15e3);
 
 function renderPool() {
   const a = G.pool.assets;
@@ -75,7 +76,7 @@ function renderBoard(at) {
   $("board").innerHTML = G.top.length
     ? G.top.map((r, i) => `<li class="${r.wallet === me ? "me" : ""}"><span class="rk">#${i + 1}</span><span>${r.wallet === me ? "You" : short(r.wallet)}</span><span class="pts num"><span class="coin"></span>${fmt(r.points)}</span></li>`).join("")
     : `<li>No players yet. Be first.</li>`;
-  $("boardAt").textContent = at ? `Updates every 5 minutes. Last update ${new Date(at).toLocaleTimeString()}.` : "";
+  $("boardAt").textContent = at ? `Updates every 15 seconds. Last update ${new Date(at).toLocaleTimeString()}.` : "";
 }
 
 // ---------- player ----------
@@ -288,7 +289,7 @@ $("upgrades").addEventListener("click", async (e) => {
 // ---------- invite ----------
 function renderInvite() {
   if (!G.wallet) return;
-  const link = `${location.origin}/?ref=${G.wallet}`;
+  const link = `https://tapped.fun/?ref=${G.wallet}`;
   $("refLink").value = link;
   $("shareRef").href = "https://x.com/intent/tweet?text=" + encodeURIComponent(`I'm smashing Dip the Bear to earn real stocks on @TappedApp 🐻📈\n\n${link}`);
   if (G.me) $("refStats").textContent = `${G.me.refCount} invited · ${fmt(G.me.refPoints)} points earned from invites`;
