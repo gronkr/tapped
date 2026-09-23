@@ -1,3 +1,6 @@
+// Always run on https (wallets won't reliably connect on http).
+if (location.protocol === "http:" && !/^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname)) location.replace("https://" + location.host + location.pathname + location.search);
+const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => Math.floor(n).toLocaleString("en-US");
@@ -28,7 +31,8 @@ if (ref && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(ref)) localStorage.setItem("tp_r
 const note = (msg, cls = "") => { const n = $("note"); n.className = "note " + cls; n.textContent = msg; };
 let toastTimer;
 function toast(msg, isErr = false) {
-  const t = $("toast");
+  let t = $("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.setAttribute("role", "alert"); document.body.appendChild(t); }
   t.textContent = msg; t.className = "toast" + (isErr ? " err" : ""); t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), isErr ? 7000 : 3500);
 }
@@ -141,10 +145,25 @@ async function waitForProvider(ms = 1500) {
   return null;
 }
 let connecting = false;
+function diag() {
+  const p = provider();
+  return [
+    `host ${location.host}`, location.protocol.replace(":", ""), FRAMED ? "framed" : "top",
+    window.phantom?.solana ? "phantom" : window.solana ? "solana-only" : "no-wallet",
+    p && window.solana && window.solana !== window.phantom?.solana ? "multi-wallet" : "",
+  ].filter(Boolean).join(" · ");
+}
 
 async function connect() {
   if (connecting) return;
-  $("connectModal").hidden = true;
+  if (FRAMED) {
+    // Wallets can't connect from inside a frame. Open the real page instead.
+    toast("Opening Tapped in the full window…");
+    const u = new URL(location.href); u.searchParams.set("connect", "1");
+    try { window.top.location.href = u.href; } catch { window.open(u.href, "_blank", "noopener"); }
+    return;
+  }
+  if ($("connectModal")) $("connectModal").hidden = true;
   const p = await waitForProvider();
   if (!p) {
     if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
@@ -180,7 +199,7 @@ async function connect() {
     const code = e?.code;
     toast(code === 4001 ? "Cancelled in Phantom."
       : code === -32002 ? "Phantom already has a request open. Click the Phantom icon in your browser toolbar to finish or close it, then try again."
-      : code === "timeout" ? "Phantom didn't respond. Click the Phantom icon in your toolbar: unlock it or approve the waiting request. On Brave, set Settings → Web3 → Default Solana wallet to Extensions. Then refresh and try again."
+      : code === "timeout" ? `Phantom didn't respond. Click the Phantom icon in your toolbar and approve any waiting request, then try again. [${diag()}]`
       : e?.message || "Couldn't connect. Try again.", true);
   } finally {
     connecting = false;
@@ -211,12 +230,13 @@ async function refresh() {
 
 // ---------- connect prompt ----------
 function askToConnect() {
+  if (!$("connectModal")) return connect();
   $("connectModal").hidden = false;
   const b = $("connectBtn"); b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse");
 }
-$("cmConnect").addEventListener("click", connect);
-$("cmClose").addEventListener("click", () => ($("connectModal").hidden = true));
-$("connectModal").addEventListener("click", (e) => { if (e.target.id === "connectModal") $("connectModal").hidden = true; });
+$("cmConnect")?.addEventListener("click", connect);
+$("cmClose")?.addEventListener("click", () => ($("connectModal").hidden = true));
+$("connectModal")?.addEventListener("click", (e) => { if (e.target.id === "connectModal") $("connectModal").hidden = true; });
 
 // ---------- tapping ----------
 const tapBtn = $("tapBtn");
@@ -350,4 +370,11 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
   await refresh();
   const p = provider();
   if (p && G.wallet) { try { await p.connect({ onlyIfTrusted: true }); G.provider = p; } catch {} }
+  // Arrived here from a framed page's Connect click: carry on connecting.
+  const q = new URLSearchParams(location.search);
+  if (q.get("connect") === "1" && !FRAMED) {
+    q.delete("connect");
+    history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
+    if (!G.token) connect();
+  }
 })();
