@@ -32,7 +32,7 @@
       settle(); const taps = Math.min(JSON.parse(opts.body || "{}").taps || 0, Math.floor(S.energy));
       S.energy -= taps; S.points += taps * stats().tapPower; return reply({ accepted: taps, player: player() });
     }
-    if (u.includes("/api/tokenacct")) return reply({ error: "Demo mode: upgrades are simulated. Tap Buy again to see it level up." }, 409);
+    if (u.includes("/api/tokenacct")) return reply({ mint: "demo", decimals: 6, program: "x", account: "x", balanceRaw: "25000000000", blockhash: "x" });
     return realFetch(url, opts);
   };
   // In demo, buying an upgrade just levels it up (no burn).

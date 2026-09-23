@@ -23,6 +23,7 @@ const G = {
   pending: 0,        // taps not yet sent
   inflight: 0,       // taps in the request currently being sent
   syncing: false,
+  balance: null,     // whole $TAPPED in the connected wallet (null = unknown)
 };
 if (window.__TP_DEMO) { localStorage.removeItem("tp_token"); localStorage.removeItem("tp_wallet"); }
 const ref = new URLSearchParams(location.search).get("ref");
@@ -208,7 +209,7 @@ async function connect() {
 }
 
 function signOut(msg) {
-  G.token = null; G.wallet = null; G.me = null;
+  G.token = null; G.wallet = null; G.me = null; G.balance = null; $("tapBal").hidden = true;
   localStorage.removeItem("tp_token"); localStorage.removeItem("tp_wallet");
   updateConnectBtn(); render(); if (msg) note(msg, "err");
 }
@@ -226,6 +227,7 @@ async function refresh() {
   const { ok, data } = await api("/api/state");
   if (ok && data.player) setPlayer(data.player);
   renderBoard();
+  loadBalance();
 }
 
 // ---------- connect prompt ----------
@@ -286,6 +288,21 @@ setInterval(() => sync(false), 3000);
 setInterval(() => sync(true), 20000);
 document.addEventListener("visibilitychange", () => { if (document.hidden) sync(false); else { loadSeason(); refresh(); } });
 
+// ---------- $TAPPED balance ----------
+async function loadBalance() {
+  const el = $("tapBal");
+  if (!G.wallet || !G.tokenMint) { el.hidden = true; G.balance = null; return; }
+  try {
+    const r = await fetch(`/api/tokenacct?wallet=${G.wallet}`).then((x) => x.json());
+    if (r.error) throw new Error(r.error);
+    G.balance = Number(BigInt(r.balanceRaw) / 10n ** BigInt(r.decimals));
+    el.innerHTML = `<span>Your $TAPPED</span><b><span class="coin"></span>${fmt(G.balance)}</b>`;
+    el.hidden = false;
+    renderUpgrades();
+  } catch { /* keep the last known value */ }
+}
+setInterval(() => { if (!document.hidden) loadBalance(); }, 60e3);
+
 // ---------- upgrades ----------
 function renderUpgrades() {
   const lvl = G.me?.lvl || { tap: 0, cap: 0, regen: 0, auto: 0 };
@@ -295,7 +312,7 @@ function renderUpgrades() {
     const cur = lvl[k], next = cur + 1, maxed = next >= u.levels.length;
     const btn = maxed ? `<button class="bluebtn off" disabled>MAXED</button>`
       : !G.tokenMint ? `<button class="bluebtn off" disabled>SOON<span class="cost">🔒</span></button>`
-      : `<button class="bluebtn" data-up="${k}" data-lvl="${next}">UPGRADE<span class="cost"><span class="coin"></span>${fmt(u.cost[next])}</span></button>`;
+      : `<button class="bluebtn${G.balance !== null && G.balance < u.cost[next] ? " cant" : ""}" data-up="${k}" data-lvl="${next}">UPGRADE<span class="cost"><span class="coin"></span>${fmt(u.cost[next])}</span></button>`;
     return `<div class="row">${btn}<div class="info"><div class="name">${esc(u.name)}</div>
       <div class="desc">${u.levels[cur]} ${esc(u.unit)}${maxed ? "" : ` → <b>${u.levels[next]}</b>`}</div><span class="lvl">Level ${cur}</span></div>
       <div class="icon">${ICONS[k]}</div></div>`;
@@ -331,7 +348,7 @@ $("upgrades").addEventListener("click", async (e) => {
     note("Burn sent. Confirming…");
     for (let i = 0; i < 20; i++) {
       const r = await api("/api/upgrade", { method: "POST", body: JSON.stringify({ upgrade, level, txSig: signature }) });
-      if (r.ok) { setPlayer(r.data.player); note(`${u.name} is now level ${level}.`, "ok"); return; }
+      if (r.ok) { setPlayer(r.data.player); note(`${u.name} is now level ${level}.`, "ok"); loadBalance(); return; }
       if (r.status !== 202) throw new Error(r.data.error || "Upgrade failed.");
       await new Promise((x) => setTimeout(x, 3000));
     }
